@@ -11,7 +11,11 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthType } from 'src/iam/authentication/enums/auth-type.enum';
+import { Auth } from 'src/iam/authentication/decorators/auth.decorator';
+import { ActiveUser } from 'src/iam/authentication/decorators/user.decorator';
 
+@Auth(AuthType.Bearer)
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
@@ -33,7 +37,8 @@ export class UsersController {
     description: 'Get all users end point',
     type: String,
   })
-  async findAll() {
+  async findAll(@ActiveUser() user) {
+    console.log(user);
     return this.usersService.findAll();
   }
 
