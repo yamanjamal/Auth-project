@@ -14,6 +14,9 @@ import { JwtService } from '@nestjs/jwt';
 import { ActiveUserDate } from '../interfaces/active-user-data.interface';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { User } from '@prisma/client';
+import { RefreshTokenIdsStorage } from './refresh-token-ids.storage/refresh-token-ids.storage';
+import { randomUUID } from 'crypto';
+import InvalidateRefreshTokenError from './exceptions/invalidate-refresh-token.error';
 
 @Injectable()
 export class AuthenticationService {
@@ -23,6 +26,7 @@ export class AuthenticationService {
     private readonly jwtService: JwtService,
     @Inject(jwtConfig.KEY)
     private readonly jwtConfigration: ConfigType<typeof jwtConfig>,
+    private readonly refreshTokenIdsStorage: RefreshTokenIdsStorage,
   ) {}
 
   async signIn(dto: SignInDto) {
@@ -55,8 +59,8 @@ export class AuthenticationService {
 
   async refreshTokens(dto: RefreshTokenDto) {
     try {
-      const { sub } = await this.jwtService.verifyAsync<
-        Pick<ActiveUserDate, 'sub'>
+      const { sub, refreshTokenId } = await this.jwtService.verifyAsync<
+        Pick<ActiveUserDate, 'sub'> & { refreshTokenId: string }
       >(dto.refreshToken, {
         secret: this.jwtConfigration.secret,
         audience: this.jwtConfigration.audience,
@@ -67,8 +71,21 @@ export class AuthenticationService {
           id: sub,
         },
       });
+
+      const isValid = await this.refreshTokenIdsStorage.validate(
+        user.id,
+        refreshTokenId,
+      );
+      if (isValid) {
+        await this.refreshTokenIdsStorage.invalidate(user.id);
+      } else {
+        throw new Error('Refresh token in invalid');
+      }
+
       return this.generateTokens(user);
     } catch (err) {
+      if (err instanceof InvalidateRefreshTokenError)
+        throw new UnauthorizedException('Access denied');
       throw new UnauthorizedException();
     }
   }
@@ -94,17 +111,18 @@ export class AuthenticationService {
   }
 
   async generateTokens(user: User) {
+    const refreshTokenId = randomUUID();
     const [accessToken, refreshToken] = await Promise.all([
       this.signToken<Partial<ActiveUserDate>>(
         user.id,
         this.jwtConfigration.accessTokenTtl,
         { email: user.email },
       ),
-      this.signToken<Partial<ActiveUserDate>>(
-        user.id,
-        this.jwtConfigration.refreshTokenTtl,
-      ),
+      this.signToken(user.id, this.jwtConfigration.refreshTokenTtl, {
+        refreshTokenId,
+      }),
     ]);
+    await this.refreshTokenIdsStorage.insert(user.id, refreshToken);
 
     return {
       accessToken,
