@@ -14,6 +14,8 @@ import { RolesGuard } from './authorization/guards/roles.guard';
 import { PermissionsGuard } from './authorization/guards/permissions.guard';
 import { ApiKeysService } from './authentication/api-keys.service';
 import { ApiKeyGuard } from './authentication/guards/api-key/api-key.guard';
+import { GoogleAuthenticationService } from './authentication/social/google-authentication.service';
+import { GoogleAuthenticationController } from './authentication/social/google-authentication.controller';
 
 @Module({
   imports: [
@@ -46,7 +48,8 @@ import { ApiKeyGuard } from './authentication/guards/api-key/api-key.guard';
     RefreshTokenIdsStorage,
     AuthenticationService,
     ApiKeysService,
+    GoogleAuthenticationService,
   ],
-  controllers: [AuthenticationController],
+  controllers: [AuthenticationController, GoogleAuthenticationController],
 })
 export class IamModule {}
