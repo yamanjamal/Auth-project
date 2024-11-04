@@ -35,6 +35,11 @@ export class AuthenticationService {
         where: {
           email: dto.email,
         },
+        include: {
+          role: {
+            include: { permissions: true },
+          },
+        },
       });
       if (!user) throw new UnauthorizedException('User does not exist');
 
@@ -46,7 +51,6 @@ export class AuthenticationService {
       if (!checkPassword)
         throw new UnauthorizedException('Password is not correct');
 
-      //TODO: add tokens
       return await this.generateTokens(user);
     } catch (err) {
       const pgUniqueViolationErrorCode = '23505';
@@ -69,6 +73,13 @@ export class AuthenticationService {
       const user = await this.prismaService.user.findFirstOrThrow({
         where: {
           id: sub,
+        },
+        include: {
+          role: {
+            include: {
+              permissions: true,
+            },
+          },
         },
       });
 
@@ -97,6 +108,7 @@ export class AuthenticationService {
           email: dto.email,
           password: await this.hashingService.hash(dto.password),
           first_name: dto.first_name,
+          roleId: 2,
         },
       });
 
@@ -110,13 +122,33 @@ export class AuthenticationService {
     }
   }
 
-  async generateTokens(user: User) {
+  async generateTokens(
+    user: User & {
+      role: {
+        permissions: {
+          name: string;
+          id: number;
+          roleId: number;
+        }[];
+      } & {
+        name: string;
+        id: number;
+      };
+    },
+  ) {
     const refreshTokenId = randomUUID();
     const [accessToken, refreshToken] = await Promise.all([
       this.signToken<Partial<ActiveUserDate>>(
         user.id,
         this.jwtConfigration.accessTokenTtl,
-        { email: user.email },
+        {
+          email: user.email,
+          role: {
+            id: user.role.id,
+            name: user.role.name,
+            permissions: user.role.permissions,
+          },
+        },
       ),
       this.signToken(user.id, this.jwtConfigration.refreshTokenTtl, {
         refreshTokenId,

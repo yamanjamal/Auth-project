@@ -15,7 +15,7 @@ import { AuthType } from 'src/iam/authentication/enums/auth-type.enum';
 import { Auth } from 'src/iam/authentication/decorators/auth.decorator';
 import { ActiveUser } from 'src/iam/authentication/decorators/user.decorator';
 
-@Auth(AuthType.Bearer)
+@Auth(AuthType.Bearer, AuthType.ApiKey)
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
