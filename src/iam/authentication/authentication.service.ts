@@ -17,6 +17,7 @@ import { User } from '@prisma/client';
 import { RefreshTokenIdsStorage } from './refresh-token-ids.storage/refresh-token-ids.storage';
 import { randomUUID } from 'crypto';
 import InvalidateRefreshTokenError from './exceptions/invalidate-refresh-token.error';
+import { OtpAuthenticationService } from './otp-authentication.service';
 
 @Injectable()
 export class AuthenticationService {
@@ -27,6 +28,7 @@ export class AuthenticationService {
     @Inject(jwtConfig.KEY)
     private readonly jwtConfigration: ConfigType<typeof jwtConfig>,
     private readonly refreshTokenIdsStorage: RefreshTokenIdsStorage,
+    private readonly otpAuthenticationService: OtpAuthenticationService,
   ) {}
 
   async signIn(dto: SignInDto) {
@@ -50,6 +52,14 @@ export class AuthenticationService {
 
       if (!checkPassword)
         throw new UnauthorizedException('Password is not correct');
+
+      if (user.isTfaEnabled) {
+        const isValid = this.otpAuthenticationService.verifyCode(
+          dto.tfaCode,
+          user.tfaSecret,
+        );
+        if (!isValid) throw new UnauthorizedException('Invalid 2FA code');
+      }
 
       return await this.generateTokens(user);
     } catch (err) {

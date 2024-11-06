@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Res } from '@nestjs/common';
 import { AuthenticationService } from './authentication.service';
 import { ApiOkResponse, ApiOperation } from '@nestjs/swagger';
 import { SignUpDto } from './dto/sign-up.dto';
@@ -6,12 +6,38 @@ import { SignInDto } from './dto/sign-in.dto';
 import { Auth } from './decorators/auth.decorator';
 import { AuthType } from './enums/auth-type.enum';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ActiveUser } from './decorators/user.decorator';
+import { ActiveUserDate } from '../interfaces/active-user-data.interface';
+import { Response } from 'express';
+import { OtpAuthenticationService } from './otp-authentication.service';
+import { toFileStream } from 'qrcode';
 
 @Auth(AuthType.None)
 @Controller('authentication')
 export class AuthenticationController {
-  constructor(private readonly authenticationService: AuthenticationService) {}
+  constructor(
+    private readonly authenticationService: AuthenticationService,
+    private readonly otpAuthenticationService: OtpAuthenticationService,
+  ) {}
 
+  @Auth(AuthType.Bearer)
+  @Post('2fa/generate')
+  @ApiOperation({ summary: 'Two factor authentication' })
+  @ApiOkResponse({
+    description: 'Two factor authentication generate end point',
+    type: String,
+  })
+  async twofaGenerate(
+    @ActiveUser() user: ActiveUserDate,
+    @Res() response: Response,
+  ) {
+    const { uri, secret } = await this.otpAuthenticationService.generateSecret(
+      user.email,
+    );
+    await this.otpAuthenticationService.enableTfaForUser(user.email, secret);
+    response.type('png');
+    return toFileStream(response, uri);
+  }
   @Post('sign-in')
   @ApiOperation({ summary: 'SignIn' })
   @ApiOkResponse({
